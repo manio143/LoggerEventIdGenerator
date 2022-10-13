@@ -38,9 +38,25 @@ namespace LoggerEventIdGenerator.Test
                 }
             }
             """;
+            var replacement = """
+            using System;
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class A
+                {  
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation(42, "This is test");
+                    }
+                }
+            }
+            """;
 
             var expected = VerifyCS.Diagnostic("LoggerEventIdGenerator").WithLocation(0);
-            await VerifyCS.VerifyAnalyzerAsync(test, expected);
+            await VerifyCS.VerifyCodeFixAsync(test, expected, replacement);
         }
     }
 }
