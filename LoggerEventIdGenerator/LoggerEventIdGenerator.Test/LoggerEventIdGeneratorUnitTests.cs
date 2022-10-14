@@ -49,7 +49,7 @@ namespace LoggerEventIdGenerator.Test
                     public static void X()
                     {
                         ILogger logger = null;
-                        logger.LogInformation(42, "This is test");
+                        logger.LogInformation(-1571446272, "This is test");
                     }
                 }
             }

@@ -35,27 +35,31 @@ namespace LoggerEventIdGenerator
 
             var diagnostic = context.Diagnostics.First();
             var diagnosticSpan = diagnostic.Location.SourceSpan;
+            var eventId = int.TryParse(diagnostic.Properties[LoggerEventIdGeneratorAnalyzer.ValuePropertyKey], out int value) ? value : -1;
 
             // Find the type declaration identified by the diagnostic.
-            var declaration = root.FindToken(diagnosticSpan.Start);
+            var declaration = root.FindToken(diagnosticSpan.Start).Parent.AncestorsAndSelf().OfType<LiteralExpressionSyntax>().First();
 
             // Register a code action that will invoke the fix.
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title: CodeFixResources.CodeFixTitle,
-                    createChangedDocument: c => GenerateNewEventId(context.Document, declaration, c),
+                    createChangedDocument: c => SetNewEventId(context.Document, declaration, eventId, c),
                     equivalenceKey: nameof(CodeFixResources.CodeFixTitle)),
                 diagnostic);
         }
 
-        private async Task<Document> GenerateNewEventId(Document document, SyntaxToken token, CancellationToken cancellationToken)
+        private async Task<Document> SetNewEventId(Document document, SyntaxNode node, int eventId, CancellationToken cancellationToken)
         {
-            // TODO: find out class FQN
-            // TODO: find other eventId tokens in this class and get max() on them to generate the new one
-            // TODO: find all other eventIds in the project and verify there's no colision
-
+            // TODO handle int.MinValue correctly
+            var literal = eventId >= 0
+                ? (SyntaxNode)SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(eventId))
+                : SyntaxFactory.PrefixUnaryExpression(
+                    SyntaxKind.UnaryMinusExpression,
+                    SyntaxFactory.Token(SyntaxKind.MinusToken),
+                    SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(-eventId)));
             var originalRoot = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
-            var newRoot = originalRoot.ReplaceToken(token, SyntaxFactory.Literal(42));
+            var newRoot = originalRoot.ReplaceNode(node, literal);
 
             return document.WithSyntaxRoot(newRoot);
         }
