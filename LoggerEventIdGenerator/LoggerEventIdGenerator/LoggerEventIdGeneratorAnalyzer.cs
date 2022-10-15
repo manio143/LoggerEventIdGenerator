@@ -17,6 +17,18 @@ namespace LoggerEventIdGenerator
         public const string DiagnosticId = "LoggerEventIdGenerator";
         public const string ValuePropertyKey = "GeneratedValue";
 
+        /// <summary>
+        /// Mask for the low 8 bits (out of 32).
+        /// 00000000000000000000000011111111
+        /// </summary>
+        private const uint LowBitMask = (1 << 8) - 1;
+
+        /// <summary>
+        /// Mask for the high 24 bits (out of 32).
+        /// 11111111111111111111111100000000
+        /// </summary>
+        private const uint HighBitMask = unchecked((uint)(-1 << 8));
+
         // You can change these strings in the Resources.resx file. If you do not want your analyzer to be localize-able, you can use regular strings for Title and MessageFormat.
         // See https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Localizing%20Analyzers.md for more on localization
         private static readonly LocalizableString Title = new LocalizableResourceString(nameof(Resources.AnalyzerTitle), Resources.ResourceManager, typeof(Resources));
@@ -80,12 +92,12 @@ namespace LoggerEventIdGenerator
                         }
 
                         // highest existing id value in class
-                        var maxId = args.Max(argOp => GetLiteralValue(argOp.Syntax));
+                        uint maxId = args.Max(argOp => (uint)GetLiteralValue(argOp.Syntax));
 
-                        var maxEntryNum = (uint)maxId & ((1 << 8) - 1); // 8 bit mask (low)
-                        var maxClassNum = (uint)maxId & (-1 << 8); // 24 bit mask (high)
+                        uint maxEntryNum = maxId & LowBitMask;
+                        uint maxClassNum = maxId & HighBitMask;
 
-                        var newClassNum = (uint)MetroHash64.Run(typeName) & (-1 << 8);
+                        uint newClassNum = (uint)MetroHash64.Run(typeName) & HighBitMask;
                         uint newEntryNum;
                         if (maxId == 0)
                         {
@@ -97,7 +109,7 @@ namespace LoggerEventIdGenerator
                         }
                         else
                         {
-                            newClassNum = maxEntryNum;
+                            newClassNum = maxClassNum;
                             newEntryNum = maxEntryNum + (uint)emptyArgsSpans.IndexOf(arg.Syntax.GetLocation().SourceSpan) + 1u;
                         }
 
