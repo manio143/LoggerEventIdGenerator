@@ -170,5 +170,101 @@ namespace LoggerEventIdGenerator.Test
             var expected = VerifyCS.Diagnostic("LoggerEventIdGenerator").WithLocation(0);
             await VerifyCS.VerifyCodeFixAsync(test, expected, replacement);
         }
+
+        [TestMethod]
+        public async Task CodeFix_For0_ManyLogStatements_OverflowMinusOne_GeneratesNewIds()
+        {
+            var test = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class A
+                {  
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation(0x64, "This is test 1");
+                        logger.LogInformation(0xafe, "This is test 2");
+                        logger.LogInformation({|#0:0|}, "This is test 3");
+                        logger.LogInformation({|#1:0|}, "This is test 4");
+                    }
+                }
+            }
+            """;
+            var replacement = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class A
+                {  
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation(0x64, "This is test 1");
+                        logger.LogInformation(0xafe, "This is test 2");
+                        logger.LogInformation(0xaff, "This is test 3");
+                        logger.LogInformation(0xb00, "This is test 4");
+                    }
+                }
+            }
+            """;
+
+            var expected = new[]
+            {
+                VerifyCS.Diagnostic("LoggerEventIdGenerator").WithLocation(0),
+                VerifyCS.Diagnostic("LoggerEventIdGenerator").WithLocation(1),
+            };
+            await VerifyCS.VerifyCodeFixAsync(test, expected, replacement);
+        }
+
+        [TestMethod]
+        public async Task CodeFix_For0_ManyLogStatements_Overflow_GeneratesNewIds()
+        {
+            var test = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class A
+                {  
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation(0x64, "This is test 1");
+                        logger.LogInformation(0xaff, "This is test 2");
+                        logger.LogInformation({|#0:0|}, "This is test 3");
+                        logger.LogInformation({|#1:0|}, "This is test 4");
+                    }
+                }
+            }
+            """;
+            var replacement = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class A
+                {  
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation(0x64, "This is test 1");
+                        logger.LogInformation(0xaff, "This is test 2");
+                        logger.LogInformation(0xb00, "This is test 3");
+                        logger.LogInformation(0xb01, "This is test 4");
+                    }
+                }
+            }
+            """;
+
+            var expected = new[]
+            {
+                VerifyCS.Diagnostic("LoggerEventIdGenerator").WithLocation(0),
+                VerifyCS.Diagnostic("LoggerEventIdGenerator").WithLocation(1),
+            };
+            await VerifyCS.VerifyCodeFixAsync(test, expected, replacement);
+        }
     }
 }

@@ -3,11 +3,10 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Reflection.Metadata;
-using System.Threading;
 
 namespace LoggerEventIdGenerator
 {
@@ -38,19 +37,61 @@ namespace LoggerEventIdGenerator
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(DiagnosticId, Title, MessageFormat, Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, description: Description);
 
-        private HashSet<int> takenIds = new HashSet<int>();
+        private Dictionary<uint, ClassNumberRecord> CompilationEventIds = new Dictionary<uint, ClassNumberRecord>();
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get { return ImmutableArray.Create(Rule); } }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisCorrectness", "RS1026:Enable concurrent execution", Justification = "Because I need stable access to the dictionary of seen ids.")]
         public override void Initialize(AnalysisContext context)
         {
-            context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
-            context.EnableConcurrentExecution();
+            // TODO: figure out how to handle situation where operation action doesn't take model action into account
 
-            context.RegisterOperationAction(AnalyzeSymbol, OperationKind.Invocation);
+            // potentially we may need to get a max eventId off of generated code
+            context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze);
+
+            context.RegisterSemanticModelAction(AnalyzeSemanticModel);
+            context.RegisterOperationAction(AnalyzeInvocationOperation, OperationKind.Invocation);
         }
 
-        private void AnalyzeSymbol(OperationAnalysisContext context)
+        private void AnalyzeSemanticModel(SemanticModelAnalysisContext context)
+        {
+            var model = context.SemanticModel;
+
+            var eventIdType = model.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.EventId");
+            if (eventIdType == null)
+            {
+                return; // the assembly doesn't have a reference to any logging
+            }
+
+            var args = FindAllEventIdLiteralArgs(model.SyntaxTree, model, eventIdType);
+            foreach (var arg in args)
+            {
+                if (arg.Value == 0)
+                {
+                    continue;
+                }
+
+                int argEntryNum = (int)(arg.Value & LowBitMask);
+                uint argClassNum = arg.Value & HighBitMask;
+
+                if (!CompilationEventIds.TryGetValue(argClassNum, out var record))
+                {
+                    record = new ClassNumberRecord
+                    {
+                        MaxEntryValue = argEntryNum,
+                        Arguments = new HashSet<ArgumentRecord>(),
+                    };
+                    CompilationEventIds.Add(argClassNum, record);
+                }
+
+                record.MaxEntryValue = Math.Max(record.MaxEntryValue, argEntryNum);
+                record.Arguments.Add(arg);
+            }
+
+            // TODO: verify there's no colision
+        }
+
+        private void AnalyzeInvocationOperation(OperationAnalysisContext context)
         {
             var eventIdType = context.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.EventId");
             if (eventIdType == null)
@@ -71,31 +112,23 @@ namespace LoggerEventIdGenerator
                         var typeSymbol = model.GetDeclaredSymbol(encompassingType);
                         var typeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-                        // all int EventId args in this class
-                        var args = encompassingType.SyntaxTree.GetRoot().DescendantNodes(_ => true).OfType<ArgumentSyntax>()
-                            .Select(argSyn => model.GetOperation(argSyn) as IArgumentOperation)
-                            .Where(argOp => argOp != null &&
-                                    argOp.Parameter.Type.Equals(eventIdType, SymbolEqualityComparer.Default) &&
-                                    TryGetLiteralValue(argOp.Syntax, out _))
-                            .OrderBy(argOp => argOp.Syntax.GetLocation().SourceSpan)
-                            .ToList();
+                        var args = FindAllEventIdLiteralArgs(encompassingType.SyntaxTree, model, eventIdType);
 
                         // args with 0
-                        var emptyArgsSpans = args.Where(argOp => GetLiteralValue(argOp.Syntax) == 0)
-                            .Select(a => a.Syntax.GetLocation().SourceSpan).ToList();
-                        
-                        // prevent duplicate ids
-                        // NOTE: not sure how well this will work tbh...
-                        foreach (var argVal in args.Select(argOp => GetLiteralValue(argOp.Syntax)).Where(val => val != 0))
-                        {
-                            takenIds.Add(argVal);
-                        }
+                        var emptyArgsSpans = args.Where(static arg => arg.Value == 0)
+                            .Select(a => a.Location.SourceSpan).OrderBy(static x => x).ToList();
 
                         // highest existing id value in class
-                        uint maxId = args.Max(argOp => (uint)GetLiteralValue(argOp.Syntax));
+                        uint maxId = args.Max(static arg => arg.Value);
 
-                        uint maxEntryNum = maxId & LowBitMask;
                         uint maxClassNum = maxId & HighBitMask;
+                        int maxEntryNum = GetMaxEntryNumForCompilation(maxClassNum);
+
+                        while (maxEntryNum == LowBitMask)
+                        {
+                            maxClassNum += LowBitMask + 1; // next HighBitMask number
+                            maxEntryNum = GetMaxEntryNumForCompilation(maxClassNum);
+                        }
 
                         uint newClassNum = (uint)MetroHash64.Run(typeName) & HighBitMask;
                         uint newEntryNum;
@@ -103,23 +136,13 @@ namespace LoggerEventIdGenerator
                         {
                             newEntryNum = (uint)emptyArgsSpans.IndexOf(arg.Syntax.GetLocation().SourceSpan);
                         }
-                        else if (maxClassNum == newClassNum) // normal case for under 256 log statements per class
-                        {
-                            newEntryNum = maxEntryNum + (uint)emptyArgsSpans.IndexOf(arg.Syntax.GetLocation().SourceSpan) + 1u;
-                        }
                         else
                         {
                             newClassNum = maxClassNum;
-                            newEntryNum = maxEntryNum + (uint)emptyArgsSpans.IndexOf(arg.Syntax.GetLocation().SourceSpan) + 1u;
+                            newEntryNum = (uint)(maxEntryNum + emptyArgsSpans.IndexOf(arg.Syntax.GetLocation().SourceSpan) + 1);
                         }
 
                         var targetNewId = (int)(newClassNum + newEntryNum);
-
-                        // TODO: find all other eventIds in the project and verify there's no colision
-                        // TODO: if id is taken we should find a new max in it's class and go from there
-                        // FIXME: this currently breaks batch fixups for edge cases
-                        while (takenIds.Contains(targetNewId))
-                            targetNewId++;
 
                         var properties = ImmutableDictionary<string, string>.Empty;
                         properties = properties.Add(ValuePropertyKey, targetNewId.ToString());
@@ -131,14 +154,39 @@ namespace LoggerEventIdGenerator
             }
         }
 
-        private static int GetLiteralValue(SyntaxNode node)
+        private int GetMaxEntryNumForCompilation(uint maxClassNum)
         {
-            if (TryGetLiteralValue(node, out int value))
+            if (CompilationEventIds.TryGetValue(maxClassNum, out var record))
             {
-                return value;
+                return record.MaxEntryValue;
             }
 
-            return default;
+            return -1;
+        }
+
+        private static List<ArgumentRecord> FindAllEventIdLiteralArgs(SyntaxTree syntaxTree, SemanticModel model, INamedTypeSymbol eventIdType)
+        {
+            var argumentOperations = new List<ArgumentRecord>(32);
+
+            foreach (var node in syntaxTree.GetRoot().DescendantNodes(static _ => true))
+            {
+                if (node is ArgumentSyntax argSyn)
+                {
+                    var argOp = model.GetOperation(argSyn) as IArgumentOperation;
+                    if (argOp != null &&
+                        argOp.Parameter.Type.Equals(eventIdType, SymbolEqualityComparer.Default) &&
+                        TryGetLiteralValue(argOp.Syntax, out int value))
+                    {
+                        argumentOperations.Add(new ArgumentRecord
+                        {
+                            Operation = argOp,
+                            Value = (uint)value,
+                        });
+                    }
+                }
+            }
+
+            return argumentOperations;
         }
 
         private static bool TryGetLiteralValue(SyntaxNode node, out int value)
@@ -163,6 +211,25 @@ namespace LoggerEventIdGenerator
             }
             value = 0;
             return false;
+        }
+
+        private struct ArgumentRecord
+        {
+            public uint Value { get; set; }
+            public Location Location => Syntax.GetLocation();
+            public SyntaxNode Syntax => Operation.Syntax;
+            public IArgumentOperation Operation { get; set; }
+
+            public override bool Equals(object obj) =>
+                obj is ArgumentRecord rec && rec.Value == this.Value && rec.Location == this.Location;
+
+            public override int GetHashCode() => this.Location.GetHashCode();
+        }
+
+        private class ClassNumberRecord
+        {
+            public int MaxEntryValue { get; set; }
+            public HashSet<ArgumentRecord> Arguments { get; set; }
         }
     }
 }
