@@ -131,12 +131,23 @@ namespace LoggerEventIdGenerator
 
         private static bool TryGetLiteralValue(SyntaxNode node, out int value)
         {
-            if (node is ArgumentSyntax argSyn &&
-                argSyn.Expression is LiteralExpressionSyntax les &&
-                les.Token.Value.GetType() == typeof(int))
+            if (node is ArgumentSyntax argSyn)
             {
-                value = (int)les.Token.Value;
-                return true;
+                // positive int
+                if(argSyn.Expression is LiteralExpressionSyntax les &&
+                    les.Token.Value.GetType() == typeof(int))
+                {
+                    value = (int)les.Token.Value;
+                    return true;
+                }
+                // negative int
+                else if (argSyn.Expression is PrefixUnaryExpressionSyntax pues &&
+                    pues.ChildNodes().First() is LiteralExpressionSyntax les2 &&
+                    les2.Token.Value.GetType() == typeof(int))
+                {
+                    value = -1 * (int)les2.Token.Value;
+                    return true;
+                }
             }
             value = 0;
             return false;
