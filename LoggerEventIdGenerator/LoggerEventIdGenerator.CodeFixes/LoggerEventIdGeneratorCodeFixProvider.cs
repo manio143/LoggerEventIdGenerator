@@ -51,15 +51,27 @@ namespace LoggerEventIdGenerator
 
         private async Task<Document> SetNewEventId(Document document, SyntaxNode node, int eventId, CancellationToken cancellationToken)
         {
-            // TODO handle int.MinValue correctly
-            var literal = eventId >= 0
-                ? (SyntaxNode)SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(eventId))
+            if (eventId == int.MinValue)
+            {
+                // special case - what are the odds?
+                // otherwise Math.Abs throws about overflow
+                eventId = -1;
+            }
+
+            var literalValue = Math.Abs(eventId);
+            var hexNumber = $"0x{Convert.ToString(literalValue, toBase: 16)}";
+            var literal = SyntaxFactory.Literal(hexNumber, literalValue);
+            var literalExpression = SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, literal);
+            
+            var expression = eventId >= 0
+                ? (SyntaxNode)literalExpression
                 : SyntaxFactory.PrefixUnaryExpression(
                     SyntaxKind.UnaryMinusExpression,
                     SyntaxFactory.Token(SyntaxKind.MinusToken),
-                    SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(-eventId)));
+                    literalExpression);
+
             var originalRoot = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
-            var newRoot = originalRoot.ReplaceNode(node, literal);
+            var newRoot = originalRoot.ReplaceNode(node, expression);
 
             return document.WithSyntaxRoot(newRoot);
         }

@@ -37,7 +37,7 @@ namespace LoggerEventIdGenerator.Test
                     public static void X()
                     {
                         ILogger logger = null;
-                        logger.LogInformation(-1571446272, "This is test");
+                        logger.LogInformation(-0x5daa5e00, "This is test");
                     }
                 }
             }
@@ -76,8 +76,8 @@ namespace LoggerEventIdGenerator.Test
                     public static void X()
                     {
                         ILogger logger = null;
-                        logger.LogInformation(-1571446272, "This is test 1");
-                        logger.LogInformation(-1571446271, "This is test 2");
+                        logger.LogInformation(-0x5daa5e00, "This is test 1");
+                        logger.LogInformation(-0x5daa5dff, "This is test 2");
                     }
                 }
             }
@@ -104,7 +104,7 @@ namespace LoggerEventIdGenerator.Test
                     public static void X()
                     {
                         ILogger logger = null;
-                        logger.LogInformation(-1571446272, "This is test 1");
+                        logger.LogInformation(-0x5daa5e00, "This is test 1");
                         logger.LogInformation({|#0:0|}, "This is test 2");
                     }
                 }
@@ -120,17 +120,14 @@ namespace LoggerEventIdGenerator.Test
                     public static void X()
                     {
                         ILogger logger = null;
-                        logger.LogInformation(-1571446272, "This is test 1");
-                        logger.LogInformation(-1571446271, "This is test 2");
+                        logger.LogInformation(-0x5daa5e00, "This is test 1");
+                        logger.LogInformation(-0x5daa5dff, "This is test 2");
                     }
                 }
             }
             """;
 
-            var expected = new[]
-            {
-                VerifyCS.Diagnostic("LoggerEventIdGenerator").WithLocation(0),
-            };
+            var expected = VerifyCS.Diagnostic("LoggerEventIdGenerator").WithLocation(0);
             await VerifyCS.VerifyCodeFixAsync(test, expected, replacement);
         }
 
@@ -147,7 +144,7 @@ namespace LoggerEventIdGenerator.Test
                     public static void X()
                     {
                         ILogger logger = null;
-                        logger.LogInformation(100, "This is test 1");
+                        logger.LogInformation(0x64, "This is test 1");
                         logger.LogInformation({|#0:0|}, "This is test 2");
                     }
                 }
@@ -163,17 +160,14 @@ namespace LoggerEventIdGenerator.Test
                     public static void X()
                     {
                         ILogger logger = null;
-                        logger.LogInformation(100, "This is test 1");
-                        logger.LogInformation(101, "This is test 2");
+                        logger.LogInformation(0x64, "This is test 1");
+                        logger.LogInformation(0x65, "This is test 2");
                     }
                 }
             }
             """;
 
-            var expected = new[]
-            {
-                VerifyCS.Diagnostic("LoggerEventIdGenerator").WithLocation(0),
-            };
+            var expected = VerifyCS.Diagnostic("LoggerEventIdGenerator").WithLocation(0);
             await VerifyCS.VerifyCodeFixAsync(test, expected, replacement);
         }
     }
