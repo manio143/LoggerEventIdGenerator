@@ -61,29 +61,56 @@ namespace LoggerEventIdGenerator {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Looks for log statements with duplicated EventId..
+        /// </summary>
+        internal static string EventIdDuplicated_Description {
+            get {
+                return ResourceManager.GetString("EventIdDuplicated_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to A duplicate EventId value found ({0}). Logs should have unique EventIds. Set the id to 0 and use codefix to generate a new id..
+        /// </summary>
+        internal static string EventIdDuplicated_Message {
+            get {
+                return ResourceManager.GetString("EventIdDuplicated_Message", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Duplicated log statement EventId..
+        /// </summary>
+        internal static string EventIdDuplicated_Title {
+            get {
+                return ResourceManager.GetString("EventIdDuplicated_Title", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Looks for log statements that have EventId set to 0 and suggests generating a custom value..
         /// </summary>
-        internal static string AnalyzerDescription {
+        internal static string EventIdZero_Description {
             get {
-                return ResourceManager.GetString("AnalyzerDescription", resourceCulture);
+                return ResourceManager.GetString("EventIdZero_Description", resourceCulture);
             }
         }
         
         /// <summary>
         ///   Looks up a localized string similar to Log statement should have a unique EventId..
         /// </summary>
-        internal static string AnalyzerMessageFormat {
+        internal static string EventIdZero_Message {
             get {
-                return ResourceManager.GetString("AnalyzerMessageFormat", resourceCulture);
+                return ResourceManager.GetString("EventIdZero_Message", resourceCulture);
             }
         }
         
         /// <summary>
         ///   Looks up a localized string similar to Logs should have unique EventIds..
         /// </summary>
-        internal static string AnalyzerTitle {
+        internal static string EventIdZero_Title {
             get {
-                return ResourceManager.GetString("AnalyzerTitle", resourceCulture);
+                return ResourceManager.GetString("EventIdZero_Title", resourceCulture);
             }
         }
     }

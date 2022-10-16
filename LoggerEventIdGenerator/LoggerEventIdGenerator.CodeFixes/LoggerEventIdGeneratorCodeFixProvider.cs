@@ -20,7 +20,7 @@ namespace LoggerEventIdGenerator
     {
         public sealed override ImmutableArray<string> FixableDiagnosticIds
         {
-            get { return ImmutableArray.Create(LoggerEventIdGeneratorAnalyzer.DiagnosticId); }
+            get { return ImmutableArray.Create(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdZero); }
         }
 
         public sealed override FixAllProvider GetFixAllProvider()

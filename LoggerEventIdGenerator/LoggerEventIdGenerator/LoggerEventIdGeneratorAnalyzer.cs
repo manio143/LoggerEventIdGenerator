@@ -13,7 +13,8 @@ namespace LoggerEventIdGenerator
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public class LoggerEventIdGeneratorAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "LoggerEventIdGenerator";
+        public const string DiagnosticId_EventIdZero = "LoggerEventIdZero";
+        public const string DiagnosticId_EventIdDuplicated = "LoggerEventIdDuplicated";
         public const string ValuePropertyKey = "GeneratedValue";
 
         /// <summary>
@@ -30,21 +31,27 @@ namespace LoggerEventIdGenerator
 
         // You can change these strings in the Resources.resx file. If you do not want your analyzer to be localize-able, you can use regular strings for Title and MessageFormat.
         // See https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Localizing%20Analyzers.md for more on localization
-        private static readonly LocalizableString Title = new LocalizableResourceString(nameof(Resources.AnalyzerTitle), Resources.ResourceManager, typeof(Resources));
-        private static readonly LocalizableString MessageFormat = new LocalizableResourceString(nameof(Resources.AnalyzerMessageFormat), Resources.ResourceManager, typeof(Resources));
-        private static readonly LocalizableString Description = new LocalizableResourceString(nameof(Resources.AnalyzerDescription), Resources.ResourceManager, typeof(Resources));
+        private static readonly LocalizableString Title_EventIdZero = new LocalizableResourceString(nameof(Resources.EventIdZero_Title), Resources.ResourceManager, typeof(Resources));
+        private static readonly LocalizableString MessageFormat_EventIdZero = new LocalizableResourceString(nameof(Resources.EventIdZero_Message), Resources.ResourceManager, typeof(Resources));
+        private static readonly LocalizableString Description_EventIdZero = new LocalizableResourceString(nameof(Resources.EventIdZero_Description), Resources.ResourceManager, typeof(Resources));
+        private static readonly LocalizableString Title_EventIdDuplicated = new LocalizableResourceString(nameof(Resources.EventIdDuplicated_Title), Resources.ResourceManager, typeof(Resources));
+        private static readonly LocalizableString MessageFormat_EventIdDuplicated = new LocalizableResourceString(nameof(Resources.EventIdDuplicated_Message), Resources.ResourceManager, typeof(Resources));
+        private static readonly LocalizableString Description_EventIdDuplicated = new LocalizableResourceString(nameof(Resources.EventIdDuplicated_Description), Resources.ResourceManager, typeof(Resources));
         private const string Category = "Logging";
 
-        private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(DiagnosticId, Title, MessageFormat, Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, description: Description);
+        private static readonly DiagnosticDescriptor DiagnosticIdZero = new DiagnosticDescriptor(DiagnosticId_EventIdZero, Title_EventIdZero, MessageFormat_EventIdZero, Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, description: Description_EventIdZero);
+        private static readonly DiagnosticDescriptor DiagnosticIdDuplicated = new DiagnosticDescriptor(DiagnosticId_EventIdDuplicated, Title_EventIdDuplicated, MessageFormat_EventIdDuplicated, Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, description: Description_EventIdDuplicated);
 
         private Dictionary<uint, ClassNumberRecord> CompilationEventIds = new Dictionary<uint, ClassNumberRecord>();
 
-        public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get { return ImmutableArray.Create(Rule); } }
+        public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
+            ImmutableArray.Create(DiagnosticIdZero, DiagnosticIdDuplicated);
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisCorrectness", "RS1026:Enable concurrent execution", Justification = "Because I need stable access to the dictionary of seen ids.")]
         public override void Initialize(AnalysisContext context)
         {
             // TODO: figure out how to handle situation where operation action doesn't take model action into account
+            CompilationEventIds.Clear();
 
             // potentially we may need to get a max eventId off of generated code
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze);
@@ -88,7 +95,24 @@ namespace LoggerEventIdGenerator
                 record.Arguments.Add(arg);
             }
 
-            // TODO: verify there's no colision
+            CheckForDuplicatedEventIds(context);
+        }
+
+        private void CheckForDuplicatedEventIds(SemanticModelAnalysisContext context)
+        {
+            foreach (var classRecord in CompilationEventIds.Values)
+            {
+                var duplicatedIds = classRecord.Arguments.GroupBy(static r => r.Value).Where(static g => g.Count() > 1);
+                foreach (var group in duplicatedIds)
+                {
+                    foreach (var arg in group)
+                    {
+                        var diagnostic = Diagnostic.Create(DiagnosticIdDuplicated, arg.Syntax.GetLocation(), arg.Syntax.GetText());
+
+                        context.ReportDiagnostic(diagnostic);
+                    }
+                }
+            }
         }
 
         private void AnalyzeInvocationOperation(OperationAnalysisContext context)
@@ -146,7 +170,7 @@ namespace LoggerEventIdGenerator
 
                         var properties = ImmutableDictionary<string, string>.Empty;
                         properties = properties.Add(ValuePropertyKey, targetNewId.ToString());
-                        var diagnostic = Diagnostic.Create(Rule, arg.Syntax.GetLocation(), properties);
+                        var diagnostic = Diagnostic.Create(DiagnosticIdZero, arg.Syntax.GetLocation(), properties);
 
                         context.ReportDiagnostic(diagnostic);
                     }

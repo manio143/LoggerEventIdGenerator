@@ -117,15 +117,24 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="AnalyzerDescription" xml:space="preserve">
+  <data name="EventIdDuplicated_Description" xml:space="preserve">
+    <value>Looks for log statements with duplicated EventId.</value>
+  </data>
+  <data name="EventIdDuplicated_Message" xml:space="preserve">
+    <value>A duplicate EventId value found ({0}). Logs should have unique EventIds. Set the id to 0 and use codefix to generate a new id.</value>
+  </data>
+  <data name="EventIdDuplicated_Title" xml:space="preserve">
+    <value>Duplicated log statement EventId.</value>
+  </data>
+  <data name="EventIdZero_Description" xml:space="preserve">
     <value>Looks for log statements that have EventId set to 0 and suggests generating a custom value.</value>
     <comment>An optional longer localizable description of the diagnostic.</comment>
   </data>
-  <data name="AnalyzerMessageFormat" xml:space="preserve">
+  <data name="EventIdZero_Message" xml:space="preserve">
     <value>Log statement should have a unique EventId.</value>
     <comment>The format-able message the diagnostic displays.</comment>
   </data>
-  <data name="AnalyzerTitle" xml:space="preserve">
+  <data name="EventIdZero_Title" xml:space="preserve">
     <value>Logs should have unique EventIds.</value>
     <comment>The title of the diagnostic.</comment>
   </data>
