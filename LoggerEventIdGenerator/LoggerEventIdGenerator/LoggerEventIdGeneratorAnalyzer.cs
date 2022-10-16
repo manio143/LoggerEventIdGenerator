@@ -56,21 +56,25 @@ namespace LoggerEventIdGenerator
             // potentially we may need to get a max eventId off of generated code
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze);
 
+            // TODO perform all analysis within single callback
             context.RegisterSemanticModelAction(AnalyzeSemanticModel);
-            context.RegisterOperationAction(AnalyzeInvocationOperation, OperationKind.Invocation);
+
+            context.RegisterOperationAction(AnalyzeArgumentOperation, OperationKind.Argument);
+            context.RegisterSyntaxNodeAction(AnalyzeLoggerMessageAttribute, SyntaxKind.Attribute);
         }
 
         private void AnalyzeSemanticModel(SemanticModelAnalysisContext context)
         {
             var model = context.SemanticModel;
 
+            var attributeType = model.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.LoggerMessageAttribute");
             var eventIdType = model.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.EventId");
             if (eventIdType == null)
             {
                 return; // the assembly doesn't have a reference to any logging
             }
 
-            var args = FindAllEventIdLiteralArgs(model.SyntaxTree, model, eventIdType);
+            var args = FindAllEventIdLiteralArgs(model.SyntaxTree, model, eventIdType, attributeType);
             foreach (var arg in args)
             {
                 if (arg.Value == 0)
@@ -115,67 +119,93 @@ namespace LoggerEventIdGenerator
             }
         }
 
-        private void AnalyzeInvocationOperation(OperationAnalysisContext context)
+        private void AnalyzeLoggerMessageAttribute(SyntaxNodeAnalysisContext context)
         {
+            var attributeType = context.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.LoggerMessageAttribute");
             var eventIdType = context.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.EventId");
-            if (eventIdType == null)
+            if (attributeType == null || eventIdType == null)
             {
                 return; // the assembly doesn't have a reference to any logging
             }
-            var invocation = context.Operation as IInvocationOperation;
 
-            foreach (var arg in invocation.Arguments)
+            var ctor = context.Node as AttributeSyntax;
+
+            var type = context.SemanticModel.GetTypeInfo(ctor).Type;
+            if (type.Equals(attributeType, SymbolEqualityComparer.Default))
             {
-                if (arg.Parameter.Type.Equals(eventIdType, SymbolEqualityComparer.Default))
+                if (ctor.ArgumentList.Arguments.Count > 0 && TryGetLiteralValue(ctor.ArgumentList.Arguments[0], out int value) && value == 0)
                 {
-                    // it's an int constant
-                    if (TryGetLiteralValue(arg.Syntax, out int value) && value == 0)
-                    {
-                        var encompassingType = invocation.Syntax.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().First();
-                        var model = context.Compilation.GetSemanticModel(encompassingType.SyntaxTree);
-                        var typeSymbol = model.GetDeclaredSymbol(encompassingType);
-                        var typeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    ProcessEventIdGenerationForArgument(context.Compilation, context.ReportDiagnostic, eventIdType, attributeType, ctor.ArgumentList.Arguments[0]);
+                }
+                // TODO: do the same for named property
+            }
+        }
 
-                        var args = FindAllEventIdLiteralArgs(encompassingType.SyntaxTree, model, eventIdType);
+        private void AnalyzeArgumentOperation(OperationAnalysisContext context)
+        {
+            var attributeType = context.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.LoggerMessageAttribute");
+            var eventIdType = context.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.EventId");
+            if (eventIdType == null /* not checking attribute because it may be null in older versions of library */)
+            {
+                return; // the assembly doesn't have a reference to any logging
+            }
 
-                        // args with 0
-                        var emptyArgsSpans = args.Where(static arg => arg.Value == 0)
-                            .Select(a => a.Location.SourceSpan).OrderBy(static x => x).ToList();
+            var arg = context.Operation as IArgumentOperation;
 
-                        // highest existing id value in class
-                        uint maxId = args.Max(static arg => arg.Value);
-
-                        uint maxClassNum = maxId & HighBitMask;
-                        int maxEntryNum = GetMaxEntryNumForCompilation(maxClassNum);
-
-                        while (maxEntryNum == LowBitMask)
-                        {
-                            maxClassNum += LowBitMask + 1; // next HighBitMask number
-                            maxEntryNum = GetMaxEntryNumForCompilation(maxClassNum);
-                        }
-
-                        uint newClassNum = (uint)MetroHash64.Run(typeName) & HighBitMask;
-                        uint newEntryNum;
-                        if (maxId == 0)
-                        {
-                            newEntryNum = (uint)emptyArgsSpans.IndexOf(arg.Syntax.GetLocation().SourceSpan);
-                        }
-                        else
-                        {
-                            newClassNum = maxClassNum;
-                            newEntryNum = (uint)(maxEntryNum + emptyArgsSpans.IndexOf(arg.Syntax.GetLocation().SourceSpan) + 1);
-                        }
-
-                        var targetNewId = (int)(newClassNum + newEntryNum);
-
-                        var properties = ImmutableDictionary<string, string>.Empty;
-                        properties = properties.Add(ValuePropertyKey, targetNewId.ToString());
-                        var diagnostic = Diagnostic.Create(DiagnosticIdZero, arg.Syntax.GetLocation(), properties);
-
-                        context.ReportDiagnostic(diagnostic);
-                    }
+            if (arg.Parameter.Type.Equals(eventIdType, SymbolEqualityComparer.Default))
+            {
+                // it's an int constant
+                if (TryGetLiteralValue(arg.Syntax, out int value) && value == 0)
+                {
+                    ProcessEventIdGenerationForArgument(context.Compilation, context.ReportDiagnostic, eventIdType, attributeType, arg.Syntax);
                 }
             }
+        }
+
+        private void ProcessEventIdGenerationForArgument(Compilation compilation, Action<Diagnostic> reportDiagnostic, INamedTypeSymbol eventIdType, INamedTypeSymbol attributeType, SyntaxNode node)
+        {
+            var encompassingType = node.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().First();
+            var model = compilation.GetSemanticModel(encompassingType.SyntaxTree);
+            var typeSymbol = model.GetDeclaredSymbol(encompassingType);
+            var typeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            var args = FindAllEventIdLiteralArgs(encompassingType.SyntaxTree, model, eventIdType, attributeType);
+
+            // args with 0
+            var emptyArgsSpans = args.Where(static arg => arg.Value == 0)
+                .Select(a => a.Location.SourceSpan).OrderBy(static x => x).ToList();
+
+            // highest existing id value in class
+            uint maxId = args.Max(static arg => arg.Value);
+
+            uint maxClassNum = maxId & HighBitMask;
+            int maxEntryNum = GetMaxEntryNumForCompilation(maxClassNum);
+
+            while (maxEntryNum == LowBitMask)
+            {
+                maxClassNum += LowBitMask + 1; // next HighBitMask number
+                maxEntryNum = GetMaxEntryNumForCompilation(maxClassNum);
+            }
+
+            uint newClassNum = (uint)MetroHash64.Run(typeName) & HighBitMask;
+            uint newEntryNum;
+            if (maxId == 0)
+            {
+                newEntryNum = (uint)emptyArgsSpans.IndexOf(node.GetLocation().SourceSpan);
+            }
+            else
+            {
+                newClassNum = maxClassNum;
+                newEntryNum = (uint)(maxEntryNum + emptyArgsSpans.IndexOf(node.GetLocation().SourceSpan) + 1);
+            }
+
+            var targetNewId = (int)(newClassNum + newEntryNum);
+
+            var properties = ImmutableDictionary<string, string>.Empty;
+            properties = properties.Add(ValuePropertyKey, targetNewId.ToString());
+            var diagnostic = Diagnostic.Create(DiagnosticIdZero, node.GetLocation(), properties);
+
+            reportDiagnostic(diagnostic);
         }
 
         private int GetMaxEntryNumForCompilation(uint maxClassNum)
@@ -188,7 +218,7 @@ namespace LoggerEventIdGenerator
             return -1;
         }
 
-        private static List<ArgumentRecord> FindAllEventIdLiteralArgs(SyntaxTree syntaxTree, SemanticModel model, INamedTypeSymbol eventIdType)
+        private static List<ArgumentRecord> FindAllEventIdLiteralArgs(SyntaxTree syntaxTree, SemanticModel model, INamedTypeSymbol eventIdType, INamedTypeSymbol attributeType)
         {
             var argumentOperations = new List<ArgumentRecord>(32);
 
@@ -201,11 +231,18 @@ namespace LoggerEventIdGenerator
                         argOp.Parameter.Type.Equals(eventIdType, SymbolEqualityComparer.Default) &&
                         TryGetLiteralValue(argOp.Syntax, out int value))
                     {
-                        argumentOperations.Add(new ArgumentRecord
+                        argumentOperations.Add(new ArgumentRecord((uint)value, argOp));
+                    }
+                }
+                else if (node is AttributeSyntax attr && attributeType != null)
+                {
+                    var type = model.GetTypeInfo(attr).Type;
+                    if (type.Equals(attributeType, SymbolEqualityComparer.Default))
+                    {
+                        if (attr.ArgumentList.Arguments.Count > 0 && TryGetLiteralValue(attr.ArgumentList.Arguments[0], out int value) && value == 0)
                         {
-                            Operation = argOp,
-                            Value = (uint)value,
-                        });
+                            argumentOperations.Add(new ArgumentRecord((uint)value, attr.ArgumentList.Arguments[0]));
+                        }
                     }
                 }
             }
@@ -233,16 +270,48 @@ namespace LoggerEventIdGenerator
                     return true;
                 }
             }
+            else if (node is AttributeArgumentSyntax attrArgSyn)
+            {
+                // positive int
+                if (attrArgSyn.Expression is LiteralExpressionSyntax les &&
+                    les.Token.Value.GetType() == typeof(int))
+                {
+                    value = (int)les.Token.Value;
+                    return true;
+                }
+                // negative int
+                else if (attrArgSyn.Expression is PrefixUnaryExpressionSyntax pues &&
+                    pues.ChildNodes().First() is LiteralExpressionSyntax les2 &&
+                    les2.Token.Value.GetType() == typeof(int))
+                {
+                    value = -1 * (int)les2.Token.Value;
+                    return true;
+                }
+            }
             value = 0;
             return false;
         }
 
         private struct ArgumentRecord
         {
-            public uint Value { get; set; }
+            public uint Value { get; }
             public Location Location => Syntax.GetLocation();
-            public SyntaxNode Syntax => Operation.Syntax;
-            public IArgumentOperation Operation { get; set; }
+            public SyntaxNode Syntax { get; }
+            public IArgumentOperation Operation { get; }
+
+            public ArgumentRecord(uint value, IArgumentOperation operation)
+            {
+                this.Value = value;
+                this.Operation = operation;
+                this.Syntax = operation.Syntax;
+            }
+
+            public ArgumentRecord(uint value, SyntaxNode syntax)
+            {
+                this.Value = value;
+                this.Operation = null;
+                this.Syntax = syntax;
+            }
 
             public override bool Equals(object obj) =>
                 obj is ArgumentRecord rec && rec.Value == this.Value && rec.Location == this.Location;

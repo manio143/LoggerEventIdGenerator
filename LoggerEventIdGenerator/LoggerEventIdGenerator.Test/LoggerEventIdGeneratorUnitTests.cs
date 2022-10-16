@@ -309,6 +309,38 @@ namespace LoggerEventIdGenerator.Test
         }
 
         [TestMethod]
+        public async Task CodeFix_For0_InAttribute_GeneratesNewIds()
+        {
+            var test = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ExampleProject
+            {
+                public static partial class Extensions
+                {
+                    [LoggerMessage({|#0:0|}, LogLevel.Debug, "This is a debug log statement.")]
+                    static partial void Do(this ILogger logger);
+                }
+            }
+            """;
+            var replacement = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ExampleProject
+            {
+                public static partial class Extensions
+                {
+                    [LoggerMessage(0, LogLevel.Debug, "This is a debug log statement.")]
+                    static partial void Do(this ILogger logger);
+                }
+            }
+            """;
+
+            var expected = VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdZero).WithLocation(0);
+            await VerifyCS.VerifyCodeFixAsync(test, expected, replacement);
+        }
+
+        [TestMethod]
         public async Task Analyzer_ForDupe_2LogStatements_BothSameId_ReportsDiagnostic()
         {
             var test = """
