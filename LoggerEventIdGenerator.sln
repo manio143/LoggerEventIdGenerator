@@ -3,15 +3,17 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.3.32929.385
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoggerEventIdGenerator", "LoggerEventIdGenerator\LoggerEventIdGenerator\LoggerEventIdGenerator.csproj", "{C9E56B0F-F399-4182-8137-DC0B81230BCC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoggerEventIdGenerator", "LoggerEventIdGenerator\LoggerEventIdGenerator\LoggerEventIdGenerator.csproj", "{C9E56B0F-F399-4182-8137-DC0B81230BCC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoggerEventIdGenerator.CodeFixes", "LoggerEventIdGenerator\LoggerEventIdGenerator.CodeFixes\LoggerEventIdGenerator.CodeFixes.csproj", "{926D7BDF-3772-427B-BDDB-FB24119F6170}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoggerEventIdGenerator.CodeFixes", "LoggerEventIdGenerator\LoggerEventIdGenerator.CodeFixes\LoggerEventIdGenerator.CodeFixes.csproj", "{926D7BDF-3772-427B-BDDB-FB24119F6170}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoggerEventIdGenerator.Package", "LoggerEventIdGenerator\LoggerEventIdGenerator.Package\LoggerEventIdGenerator.Package.csproj", "{C49AEECE-E9BD-42DD-A3A5-84DF2F84BCB4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoggerEventIdGenerator.Package", "LoggerEventIdGenerator\LoggerEventIdGenerator.Package\LoggerEventIdGenerator.Package.csproj", "{C49AEECE-E9BD-42DD-A3A5-84DF2F84BCB4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoggerEventIdGenerator.Test", "LoggerEventIdGenerator\LoggerEventIdGenerator.Test\LoggerEventIdGenerator.Test.csproj", "{56C1CEC0-A4D3-41D8-9ACB-622D39C01E2B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoggerEventIdGenerator.Test", "LoggerEventIdGenerator\LoggerEventIdGenerator.Test\LoggerEventIdGenerator.Test.csproj", "{56C1CEC0-A4D3-41D8-9ACB-622D39C01E2B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoggerEventIdGenerator.Vsix", "LoggerEventIdGenerator\LoggerEventIdGenerator.Vsix\LoggerEventIdGenerator.Vsix.csproj", "{6BCCA6F4-0604-4B93-89E2-FF21D5B647FB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoggerEventIdGenerator.Vsix", "LoggerEventIdGenerator\LoggerEventIdGenerator.Vsix\LoggerEventIdGenerator.Vsix.csproj", "{6BCCA6F4-0604-4B93-89E2-FF21D5B647FB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExampleProject", "ExampleProject\ExampleProject.csproj", "{2D2EBED3-7122-4CB9-93AE-8B275EBCFD8D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -39,6 +41,10 @@ Global
 		{6BCCA6F4-0604-4B93-89E2-FF21D5B647FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6BCCA6F4-0604-4B93-89E2-FF21D5B647FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6BCCA6F4-0604-4B93-89E2-FF21D5B647FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2D2EBED3-7122-4CB9-93AE-8B275EBCFD8D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2D2EBED3-7122-4CB9-93AE-8B275EBCFD8D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2D2EBED3-7122-4CB9-93AE-8B275EBCFD8D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2D2EBED3-7122-4CB9-93AE-8B275EBCFD8D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
