@@ -10,16 +10,14 @@
   <PropertyGroup>
     <PackageId>LoggerEventIdGenerator</PackageId>
     <PackageVersion>1.0.0.0</PackageVersion>
-    <Authors>maria</Authors>
-    <PackageLicenseUrl>http://LICENSE_URL_HERE_OR_DELETE_THIS_LINE</PackageLicenseUrl>
-    <PackageProjectUrl>http://PROJECT_URL_HERE_OR_DELETE_THIS_LINE</PackageProjectUrl>
-    <PackageIconUrl>http://ICON_URL_HERE_OR_DELETE_THIS_LINE</PackageIconUrl>
-    <RepositoryUrl>http://REPOSITORY_URL_HERE_OR_DELETE_THIS_LINE</RepositoryUrl>
+    <Authors>Marian Dziubiak</Authors>
+    <PackageLicenseUrl>https://github.com/manio143/LoggerEventIdGenerator/blob/master/LICENSE</PackageLicenseUrl>
+    <RepositoryUrl>https://github.com/manio143/LoggerEventIdGenerator</RepositoryUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <Description>LoggerEventIdGenerator</Description>
-    <PackageReleaseNotes>Summary of changes made in this release of the package.</PackageReleaseNotes>
-    <Copyright>Copyright</Copyright>
-    <PackageTags>LoggerEventIdGenerator, analyzers</PackageTags>
+    <Description>A small analyzer + code fix, that is meant to allow for easy generation of event Ids for your log statements.</Description>
+    <PackageReleaseNotes>Generates log id for 0 id, reports on duplicate ids.</PackageReleaseNotes>
+    <Copyright>Copyright (c) 2022 Marian Dziubiak</Copyright>
+    <PackageTags>logging, analyzers</PackageTags>
     <DevelopmentDependency>true</DevelopmentDependency>
     <NoPackageAnalysis>true</NoPackageAnalysis>
 
