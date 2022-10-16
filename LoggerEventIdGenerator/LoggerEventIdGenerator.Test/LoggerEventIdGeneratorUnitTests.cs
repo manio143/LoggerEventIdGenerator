@@ -172,6 +172,47 @@ namespace LoggerEventIdGenerator.Test
         }
 
         [TestMethod]
+        public async Task CodeFix_For0_2LogStatements_1AlreadySetToMinValueMinus1_GeneratesMinus1()
+        {
+            // We can deal with int.MinValue event Id because it has no Abs form, so I opted to return -1 instead - this is a rare thing anyways
+            var test = $$"""
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class A
+                {
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation({{unchecked(int.MinValue - 1)}}, "This is test 1");
+                        logger.LogInformation({|#0:0|}, "This is test 2");
+                    }
+                }
+            }
+            """;
+            var replacement = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class A
+                {
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation(2147483647, "This is test 1");
+                        logger.LogInformation(-0x1, "This is test 2");
+                    }
+                }
+            }
+            """;
+
+            var expected = VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdZero).WithLocation(0);
+            await VerifyCS.VerifyCodeFixAsync(test, expected, replacement);
+        }
+
+        [TestMethod]
         public async Task CodeFix_For0_ManyLogStatements_OverflowMinusOne_GeneratesNewIds()
         {
             var test = """
@@ -281,6 +322,74 @@ namespace LoggerEventIdGenerator.Test
                     {
                         ILogger logger = null;
                         logger.LogInformation({|#0:0x01|}, "This is test 1");
+                        logger.LogInformation({|#1:0x01|}, "This is test 2");
+                    }
+                }
+            }
+            """;
+
+            var expected = new[]
+            {
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithArguments("0x01"),
+            };
+            await VerifyCS.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [TestMethod]
+        public async Task Analyzer_ForDupe_4LogStatements_2WithSameId_ReportsDiagnostic()
+        {
+            var test = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class A
+                {  
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation({|#0:0x01|}, "This is test 1");
+                        logger.LogInformation(0x02, "This is test 2");
+                        logger.LogInformation({|#1:0x01|}, "This is test 3");
+                        logger.LogInformation(0x03, "This is test 4");
+                    }
+                }
+            }
+            """;
+
+            var expected = new[]
+            {
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithArguments("0x01"),
+            };
+            await VerifyCS.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [TestMethod]
+        public async Task Analyzer_ForDupe_LogStatementsAcrossClasses_2WithSameId_ReportsDiagnostic()
+        {
+            var test = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class A
+                {  
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation({|#0:0x01|}, "This is test 1");
+                    }
+                }
+            }
+            namespace ConsoleApplication2
+            {
+                class B
+                {  
+                    public static void Y()
+                    {
+                        ILogger logger = null;
                         logger.LogInformation({|#1:0x01|}, "This is test 2");
                     }
                 }
