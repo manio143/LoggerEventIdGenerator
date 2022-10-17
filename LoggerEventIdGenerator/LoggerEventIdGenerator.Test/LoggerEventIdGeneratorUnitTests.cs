@@ -405,6 +405,76 @@ namespace LoggerEventIdGenerator.Test
         }
 
         [TestMethod]
+        public async Task CodeFix_For0_InDifferentClass_GeneratesDifferentIds_OnlyAcrossFiles()
+        {
+            // within the same file we hit the propagation of first classNum in following iterative code fixes.
+            var test1 = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class A
+                {  
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation({|#0:0|}, "This is test 1");
+                    }
+                }
+            }
+            """;
+            var replacement1 = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class A
+                {  
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation(-0x5daa5e00, "This is test 1");
+                    }
+                }
+            }
+            """;
+            var test2 = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class B
+                {  
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation({|#0:0|}, "This is test 1");
+                    }
+                }
+            }
+            """;
+            var replacement2 = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                class B
+                {  
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation(-0x61cd9600, "This is test 1");
+                    }
+                }
+            }
+            """;
+
+            var expected = VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdZero).WithLocation(0);
+            await VerifyCS.VerifyCodeFixAsync(test1, expected, replacement1);
+            await VerifyCS.VerifyCodeFixAsync(test2, expected, replacement2);
+        }
+
+        [TestMethod]
         public async Task Analyzer_ForDupe_2LogStatements_BothSameId_ReportsDiagnostic()
         {
             var test = """
@@ -487,6 +557,63 @@ namespace LoggerEventIdGenerator.Test
                     {
                         ILogger logger = null;
                         logger.LogInformation({|#1:0x01|}, "This is test 2");
+                    }
+                }
+            }
+            """;
+
+            var expected = new[]
+            {
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithArguments("0x01"),
+            };
+            await VerifyCS.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [TestMethod]
+        public async Task Analyzer_ForDupe_Attributes_2WithSameId_ReportsDiagnostic()
+        {
+            var test = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                partial class A
+                {  
+                    [LoggerMessage({|#0:0x01|}, LogLevel.Debug, "This is a debug log statement.")]
+                    static partial void Do1(ILogger logger);
+                    
+                    [LoggerMessage({|#1:0x01|}, LogLevel.Debug, "This is a debug log statement.")]
+                    static partial void Do2(ILogger logger);
+                }
+            }
+            """;
+
+            var expected = new[]
+            {
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithArguments("0x01"),
+            };
+            await VerifyCS.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [TestMethod]
+        public async Task Analyzer_ForDupe_AttributeAndMethod_2WithSameId_ReportsDiagnostic()
+        {
+            var test = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ConsoleApplication1
+            {
+                partial class A
+                {  
+                    [LoggerMessage({|#0:0x01|}, LogLevel.Debug, "This is a debug log statement.")]
+                    static partial void Do(ILogger logger);
+                    
+                    public static void X()
+                    {
+                        ILogger logger = null;
+                        logger.LogInformation({|#1:0x01|}, "This is test 1");
                     }
                 }
             }
