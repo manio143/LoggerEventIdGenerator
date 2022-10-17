@@ -38,13 +38,16 @@ namespace LoggerEventIdGenerator
             var eventId = int.TryParse(diagnostic.Properties[LoggerEventIdGeneratorAnalyzer.ValuePropertyKey], out int value) ? value : -1;
 
             // Find the type declaration identified by the diagnostic.
-            var declaration = root.FindToken(diagnosticSpan.Start).Parent.AncestorsAndSelf().OfType<LiteralExpressionSyntax>().First();
+            var token = root.FindToken(diagnosticSpan.Start);
+            var node = token.Parent;
+            var expression = node.AncestorsAndSelf().OfType<ArgumentSyntax>().FirstOrDefault()?.Expression
+                ?? node.AncestorsAndSelf().OfType<AttributeArgumentSyntax>().FirstOrDefault()?.Expression;
 
             // Register a code action that will invoke the fix.
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title: CodeFixResources.CodeFixTitle,
-                    createChangedDocument: c => SetNewEventId(context.Document, declaration, eventId, c),
+                    createChangedDocument: c => SetNewEventId(context.Document, expression, eventId, c),
                     equivalenceKey: nameof(CodeFixResources.CodeFixTitle)),
                 diagnostic);
         }

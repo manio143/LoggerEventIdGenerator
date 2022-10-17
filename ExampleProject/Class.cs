@@ -9,6 +9,9 @@ namespace ExampleProject
 
         [LoggerMessage(0, LogLevel.Information, "This is an info log statement.")]
         public static partial void MyILog1(this ILogger logger);
+
+        [LoggerMessage(EventId = 0, Level = LogLevel.Error, Message = "This is an error log statement.")]
+        public static partial void MyELog(this ILogger logger);
     }
 
     public class Class

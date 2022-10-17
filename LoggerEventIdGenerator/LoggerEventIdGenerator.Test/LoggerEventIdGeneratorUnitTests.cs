@@ -309,7 +309,7 @@ namespace LoggerEventIdGenerator.Test
         }
 
         [TestMethod]
-        public async Task CodeFix_For0_InAttribute_GeneratesNewIds()
+        public async Task CodeFix_For0_InAttribute_Ctor_GeneratesNewIds()
         {
             var test = """
             using Microsoft.Extensions.Logging;
@@ -330,7 +330,71 @@ namespace LoggerEventIdGenerator.Test
             {
                 public static partial class Extensions
                 {
-                    [LoggerMessage(0, LogLevel.Debug, "This is a debug log statement.")]
+                    [LoggerMessage(0x3b3e7c00, LogLevel.Debug, "This is a debug log statement.")]
+                    static partial void Do(this ILogger logger);
+                }
+            }
+            """;
+
+            var expected = VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdZero).WithLocation(0);
+            await VerifyCS.VerifyCodeFixAsync(test, expected, replacement);
+        }
+
+        [TestMethod]
+        public async Task CodeFix_For0_InAttribute_CtorNamed_GeneratesNewIds()
+        {
+            var test = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ExampleProject
+            {
+                public static partial class Extensions
+                {
+                    [LoggerMessage({|#0:eventId: 0|}, level: LogLevel.Debug, message: "This is a debug log statement.")]
+                    static partial void Do(this ILogger logger);
+                }
+            }
+            """;
+            var replacement = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ExampleProject
+            {
+                public static partial class Extensions
+                {
+                    [LoggerMessage(eventId: 0x3b3e7c00, level: LogLevel.Debug, message: "This is a debug log statement.")]
+                    static partial void Do(this ILogger logger);
+                }
+            }
+            """;
+
+            var expected = VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdZero).WithLocation(0);
+            await VerifyCS.VerifyCodeFixAsync(test, expected, replacement);
+        }
+
+        [TestMethod]
+        public async Task CodeFix_For0_InAttribute_Property_GeneratesNewIds()
+        {
+            var test = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ExampleProject
+            {
+                public static partial class Extensions
+                {
+                    [LoggerMessage(Level = LogLevel.Error, {|#0:EventId = 0|}, Message = "This is an error log statement.")]
+                    static partial void Do(this ILogger logger);
+                }
+            }
+            """;
+            var replacement = """
+            using Microsoft.Extensions.Logging;
+
+            namespace ExampleProject
+            {
+                public static partial class Extensions
+                {
+                    [LoggerMessage(Level = LogLevel.Error, EventId = 0x3b3e7bff, Message = "This is an error log statement.")]
                     static partial void Do(this ILogger logger);
                 }
             }

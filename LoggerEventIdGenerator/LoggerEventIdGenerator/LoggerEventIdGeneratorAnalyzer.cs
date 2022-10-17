@@ -133,11 +133,15 @@ namespace LoggerEventIdGenerator
             var type = context.SemanticModel.GetTypeInfo(ctor).Type;
             if (type.Equals(attributeType, SymbolEqualityComparer.Default))
             {
-                if (ctor.ArgumentList.Arguments.Count > 0 && TryGetLiteralValue(ctor.ArgumentList.Arguments[0], out int value) && value == 0)
+                int index = 0;
+                foreach (var attrArgSyn in ctor.ArgumentList.Arguments)
                 {
-                    ProcessEventIdGenerationForArgument(context.Compilation, context.ReportDiagnostic, eventIdType, attributeType, ctor.ArgumentList.Arguments[0]);
+                    const string expectedParameterName = "EventId";
+                    var parameterName = (attrArgSyn.NameEquals?.Name ?? attrArgSyn.NameColon?.Name)?.Identifier.Text;
+                    if ((expectedParameterName.Equals(parameterName, StringComparison.OrdinalIgnoreCase) || (parameterName is null && index == 0)) &&
+                        TryGetLiteralValue(attrArgSyn, out int value) && value == 0)
+                        ProcessEventIdGenerationForArgument(context.Compilation, context.ReportDiagnostic, eventIdType, attributeType, attrArgSyn);
                 }
-                // TODO: do the same for named property
             }
         }
 
@@ -239,9 +243,16 @@ namespace LoggerEventIdGenerator
                     var type = model.GetTypeInfo(attr).Type;
                     if (type.Equals(attributeType, SymbolEqualityComparer.Default))
                     {
-                        if (attr.ArgumentList.Arguments.Count > 0 && TryGetLiteralValue(attr.ArgumentList.Arguments[0], out int value) && value == 0)
+                        int index = 0;
+                        foreach (var attrArgSyn in attr.ArgumentList.Arguments)
                         {
-                            argumentOperations.Add(new ArgumentRecord((uint)value, attr.ArgumentList.Arguments[0]));
+                            const string expectedParameterName = "EventId";
+                            var parameterName = (attrArgSyn.NameEquals?.Name ?? attrArgSyn.NameColon?.Name)?.Identifier.Text;
+                            if ((expectedParameterName.Equals(parameterName, StringComparison.OrdinalIgnoreCase) || (parameterName is null && index == 0)) &&
+                                TryGetLiteralValue(attrArgSyn, out int value))
+                            {
+                                argumentOperations.Add(new ArgumentRecord((uint)value, attr.ArgumentList.Arguments[0]));
+                            }
                         }
                     }
                 }
