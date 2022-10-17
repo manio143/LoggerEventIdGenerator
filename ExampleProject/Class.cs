@@ -2,6 +2,7 @@
 
 namespace ExampleProject
 {
+#pragma warning disable SYSLIB1006 // Multiple logging methods cannot use the same event id within a class
     public static partial class Extensions
     {
         [LoggerMessage(0, LogLevel.Debug, "This is a debug log statement.")]
