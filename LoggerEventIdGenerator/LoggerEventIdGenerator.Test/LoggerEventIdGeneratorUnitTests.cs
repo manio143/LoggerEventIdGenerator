@@ -394,7 +394,7 @@ namespace LoggerEventIdGenerator.Test
             {
                 public static partial class Extensions
                 {
-                    [LoggerMessage(Level = LogLevel.Error, EventId = 0x3b3e7bff, Message = "This is an error log statement.")]
+                    [LoggerMessage(Level = LogLevel.Error, EventId = 0x3b3e7c00, Message = "This is an error log statement.")]
                     static partial void Do(this ILogger logger);
                 }
             }

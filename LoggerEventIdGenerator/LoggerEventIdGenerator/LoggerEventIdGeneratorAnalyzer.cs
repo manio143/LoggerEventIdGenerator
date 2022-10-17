@@ -56,11 +56,7 @@ namespace LoggerEventIdGenerator
             // potentially we may need to get a max eventId off of generated code
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze);
 
-            // TODO perform all analysis within single callback
             context.RegisterSemanticModelAction(AnalyzeSemanticModel);
-
-            context.RegisterOperationAction(AnalyzeArgumentOperation, OperationKind.Argument);
-            context.RegisterSyntaxNodeAction(AnalyzeLoggerMessageAttribute, SyntaxKind.Attribute);
         }
 
         private void AnalyzeSemanticModel(SemanticModelAnalysisContext context)
@@ -69,16 +65,18 @@ namespace LoggerEventIdGenerator
 
             var attributeType = model.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.LoggerMessageAttribute");
             var eventIdType = model.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.EventId");
-            if (eventIdType == null)
+            if (eventIdType == null  /* not checking attribute because it may be null in older versions of library */)
             {
                 return; // the assembly doesn't have a reference to any logging
             }
 
             var args = FindAllEventIdLiteralArgs(model.SyntaxTree, model, eventIdType, attributeType);
+            var zeroArgs = new List<ArgumentRecord>(args.Count);
             foreach (var arg in args)
             {
                 if (arg.Value == 0)
                 {
+                    zeroArgs.Add(arg);
                     continue;
                 }
 
@@ -97,6 +95,11 @@ namespace LoggerEventIdGenerator
 
                 record.MaxEntryValue = Math.Max(record.MaxEntryValue, argEntryNum);
                 record.Arguments.Add(arg);
+            }
+
+            foreach (var arg in zeroArgs)
+            {
+                ProcessEventIdGenerationForArgument(context.SemanticModel.Compilation, context.ReportDiagnostic, eventIdType, attributeType, arg.Syntax, args);
             }
 
             CheckForDuplicatedEventIds(context);
@@ -119,64 +122,21 @@ namespace LoggerEventIdGenerator
             }
         }
 
-        private void AnalyzeLoggerMessageAttribute(SyntaxNodeAnalysisContext context)
-        {
-            var attributeType = context.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.LoggerMessageAttribute");
-            var eventIdType = context.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.EventId");
-            if (attributeType == null || eventIdType == null)
-            {
-                return; // the assembly doesn't have a reference to any logging
-            }
-
-            var ctor = context.Node as AttributeSyntax;
-
-            var type = context.SemanticModel.GetTypeInfo(ctor).Type;
-            if (type.Equals(attributeType, SymbolEqualityComparer.Default))
-            {
-                int index = 0;
-                foreach (var attrArgSyn in ctor.ArgumentList.Arguments)
-                {
-                    const string expectedParameterName = "EventId";
-                    var parameterName = (attrArgSyn.NameEquals?.Name ?? attrArgSyn.NameColon?.Name)?.Identifier.Text;
-                    if ((expectedParameterName.Equals(parameterName, StringComparison.OrdinalIgnoreCase) || (parameterName is null && index == 0)) &&
-                        TryGetLiteralValue(attrArgSyn, out int value) && value == 0)
-                        ProcessEventIdGenerationForArgument(context.Compilation, context.ReportDiagnostic, eventIdType, attributeType, attrArgSyn);
-                }
-            }
-        }
-
-        private void AnalyzeArgumentOperation(OperationAnalysisContext context)
-        {
-            var attributeType = context.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.LoggerMessageAttribute");
-            var eventIdType = context.Compilation.GetTypeByMetadataName("Microsoft.Extensions.Logging.EventId");
-            if (eventIdType == null /* not checking attribute because it may be null in older versions of library */)
-            {
-                return; // the assembly doesn't have a reference to any logging
-            }
-
-            var arg = context.Operation as IArgumentOperation;
-
-            if (arg.Parameter.Type.Equals(eventIdType, SymbolEqualityComparer.Default))
-            {
-                // it's an int constant
-                if (TryGetLiteralValue(arg.Syntax, out int value) && value == 0)
-                {
-                    ProcessEventIdGenerationForArgument(context.Compilation, context.ReportDiagnostic, eventIdType, attributeType, arg.Syntax);
-                }
-            }
-        }
-
-        private void ProcessEventIdGenerationForArgument(Compilation compilation, Action<Diagnostic> reportDiagnostic, INamedTypeSymbol eventIdType, INamedTypeSymbol attributeType, SyntaxNode node)
+        private void ProcessEventIdGenerationForArgument(
+            Compilation compilation,
+            Action<Diagnostic> reportDiagnostic,
+            INamedTypeSymbol eventIdType,
+            INamedTypeSymbol attributeType,
+            SyntaxNode node,
+            List<ArgumentRecord> args)
         {
             var encompassingType = node.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().First();
             var model = compilation.GetSemanticModel(encompassingType.SyntaxTree);
             var typeSymbol = model.GetDeclaredSymbol(encompassingType);
             var typeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-            var args = FindAllEventIdLiteralArgs(encompassingType.SyntaxTree, model, eventIdType, attributeType);
-
             // args with 0
-            var emptyArgsSpans = args.Where(static arg => arg.Value == 0)
+            var zeroArgsSpans = args.Where(static arg => arg.Value == 0)
                 .Select(a => a.Location.SourceSpan).OrderBy(static x => x).ToList();
 
             // highest existing id value in class
@@ -191,16 +151,24 @@ namespace LoggerEventIdGenerator
                 maxEntryNum = GetMaxEntryNumForCompilation(maxClassNum);
             }
 
+            // when we have multiple 0 eventId values in the file
+            // we precompute what would the generated value be if we applied all codefixes one by one from the top of the file
+            var index = zeroArgsSpans.IndexOf(node.GetLocation().SourceSpan);
+            if (index < 0)
+            {
+                throw new Exception("BUG: arg was not found on the list");
+            }
+
             uint newClassNum = (uint)MetroHash64.Run(typeName) & HighBitMask;
             uint newEntryNum;
             if (maxId == 0)
             {
-                newEntryNum = (uint)emptyArgsSpans.IndexOf(node.GetLocation().SourceSpan);
+                newEntryNum = (uint)index;
             }
             else
             {
                 newClassNum = maxClassNum;
-                newEntryNum = (uint)(maxEntryNum + emptyArgsSpans.IndexOf(node.GetLocation().SourceSpan) + 1);
+                newEntryNum = (uint)(maxEntryNum + index + 1);
             }
 
             var targetNewId = (int)(newClassNum + newEntryNum);
@@ -251,7 +219,7 @@ namespace LoggerEventIdGenerator
                             if ((expectedParameterName.Equals(parameterName, StringComparison.OrdinalIgnoreCase) || (parameterName is null && index == 0)) &&
                                 TryGetLiteralValue(attrArgSyn, out int value))
                             {
-                                argumentOperations.Add(new ArgumentRecord((uint)value, attr.ArgumentList.Arguments[0]));
+                                argumentOperations.Add(new ArgumentRecord((uint)value, attrArgSyn));
                             }
                         }
                     }
@@ -263,35 +231,28 @@ namespace LoggerEventIdGenerator
 
         private static bool TryGetLiteralValue(SyntaxNode node, out int value)
         {
+            ExpressionSyntax expression = null;
             if (node is ArgumentSyntax argSyn)
             {
-                // positive int
-                if(argSyn.Expression is LiteralExpressionSyntax les &&
-                    les.Token.Value.GetType() == typeof(int))
-                {
-                    value = (int)les.Token.Value;
-                    return true;
-                }
-                // negative int
-                else if (argSyn.Expression is PrefixUnaryExpressionSyntax pues &&
-                    pues.ChildNodes().First() is LiteralExpressionSyntax les2 &&
-                    les2.Token.Value.GetType() == typeof(int))
-                {
-                    value = -1 * (int)les2.Token.Value;
-                    return true;
-                }
+                expression = argSyn.Expression;
             }
             else if (node is AttributeArgumentSyntax attrArgSyn)
             {
+                expression= attrArgSyn.Expression;
+            }
+
+            if (expression != null)
+            {
                 // positive int
-                if (attrArgSyn.Expression is LiteralExpressionSyntax les &&
+                if (expression is LiteralExpressionSyntax les &&
                     les.Token.Value.GetType() == typeof(int))
                 {
                     value = (int)les.Token.Value;
                     return true;
                 }
                 // negative int
-                else if (attrArgSyn.Expression is PrefixUnaryExpressionSyntax pues &&
+                // note this isn't handling int.MinValue edge case
+                else if (expression is PrefixUnaryExpressionSyntax pues &&
                     pues.ChildNodes().First() is LiteralExpressionSyntax les2 &&
                     les2.Token.Value.GetType() == typeof(int))
                 {
@@ -299,6 +260,7 @@ namespace LoggerEventIdGenerator
                     return true;
                 }
             }
+
             value = 0;
             return false;
         }
