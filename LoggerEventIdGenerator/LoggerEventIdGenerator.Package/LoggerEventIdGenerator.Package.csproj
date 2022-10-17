@@ -11,7 +11,7 @@
     <PackageId>LoggerEventIdGenerator</PackageId>
     <PackageVersion>1.0.0.0</PackageVersion>
     <Authors>Marian Dziubiak</Authors>
-    <PackageLicenseUrl>https://github.com/manio143/LoggerEventIdGenerator/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/manio143/LoggerEventIdGenerator</RepositoryUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Description>A small analyzer + code fix, that is meant to allow for easy generation of event Ids for your log statements.</Description>

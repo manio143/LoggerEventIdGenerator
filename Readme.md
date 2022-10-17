@@ -2,7 +2,7 @@
 
 A small analyzer + code fix, that is meant to allow for easy generation of event Ids for your log statements.
 
-![CodeFix to generate eventId on a LoggerMessage attribute](./docs/images/codefix_screenshot.png)
+![CodeFix to generate eventId on a LoggerMessage attribute](https://raw.githubusercontent.com/manio143/LoggerEventIdGenerator/master/docs/images/codefix_screenshot.png)
 
 ## Details
 
