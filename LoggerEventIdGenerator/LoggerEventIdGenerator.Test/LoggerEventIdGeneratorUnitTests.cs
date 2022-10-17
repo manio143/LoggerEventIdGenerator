@@ -496,8 +496,8 @@ namespace LoggerEventIdGenerator.Test
 
             var expected = new[]
             {
-                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithArguments("0x01"),
-                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithLocation(1).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithLocation(0).WithArguments("0x01"),
             };
             await VerifyCS.VerifyAnalyzerAsync(test, expected);
         }
@@ -526,8 +526,8 @@ namespace LoggerEventIdGenerator.Test
 
             var expected = new[]
             {
-                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithArguments("0x01"),
-                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithLocation(1).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithLocation(0).WithArguments("0x01"),
             };
             await VerifyCS.VerifyAnalyzerAsync(test, expected);
         }
@@ -564,8 +564,8 @@ namespace LoggerEventIdGenerator.Test
 
             var expected = new[]
             {
-                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithArguments("0x01"),
-                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithLocation(1).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithLocation(0).WithArguments("0x01"),
             };
             await VerifyCS.VerifyAnalyzerAsync(test, expected);
         }
@@ -591,8 +591,8 @@ namespace LoggerEventIdGenerator.Test
 
             var expected = new[]
             {
-                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithArguments("0x01"),
-                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithLocation(1).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithLocation(0).WithArguments("0x01"),
             };
             await VerifyCS.VerifyAnalyzerAsync(test, expected);
         }
@@ -621,8 +621,8 @@ namespace LoggerEventIdGenerator.Test
 
             var expected = new[]
             {
-                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithArguments("0x01"),
-                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(0).WithLocation(1).WithArguments("0x01"),
+                VerifyCS.Diagnostic(LoggerEventIdGeneratorAnalyzer.DiagnosticId_EventIdDuplicated).WithLocation(1).WithLocation(0).WithArguments("0x01"),
             };
             await VerifyCS.VerifyAnalyzerAsync(test, expected);
         }

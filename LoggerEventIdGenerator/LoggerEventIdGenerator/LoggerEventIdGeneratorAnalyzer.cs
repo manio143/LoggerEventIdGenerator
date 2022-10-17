@@ -10,6 +10,10 @@ using System.Linq;
 
 namespace LoggerEventIdGenerator
 {
+    /// <summary>
+    /// Runs analysis on the semantic model of a C# file to detect all instances of arguments which hold
+    /// integer literals that will be used as EventId.
+    /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public class LoggerEventIdGeneratorAnalyzer : DiagnosticAnalyzer
     {
@@ -50,7 +54,6 @@ namespace LoggerEventIdGenerator
         [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisCorrectness", "RS1026:Enable concurrent execution", Justification = "Because I need stable access to the dictionary of seen ids.")]
         public override void Initialize(AnalysisContext context)
         {
-            // TODO: figure out how to handle situation where operation action doesn't take model action into account
             CompilationEventIds.Clear();
 
             // potentially we may need to get a max eventId off of generated code
@@ -59,6 +62,10 @@ namespace LoggerEventIdGenerator
             context.RegisterSemanticModelAction(AnalyzeSemanticModel);
         }
 
+        /// <summary>
+        /// Runs analysis on the semantic model of a C# file to detect all instances of arguments which hold
+        /// integer literals that will be used as EventId.
+        /// </summary>
         private void AnalyzeSemanticModel(SemanticModelAnalysisContext context)
         {
             var model = context.SemanticModel;
@@ -70,7 +77,7 @@ namespace LoggerEventIdGenerator
                 return; // the assembly doesn't have a reference to any logging
             }
 
-            var args = FindAllEventIdLiteralArgs(model.SyntaxTree, model, eventIdType, attributeType);
+            var args = FindAllEventIdLiteralArgs(model, eventIdType, attributeType);
             var zeroArgs = new List<ArgumentRecord>(args.Count);
             foreach (var arg in args)
             {
@@ -99,13 +106,16 @@ namespace LoggerEventIdGenerator
 
             foreach (var arg in zeroArgs)
             {
-                ProcessEventIdGenerationForArgument(context.SemanticModel.Compilation, context.ReportDiagnostic, eventIdType, attributeType, arg.Syntax, args);
+                ProcessEventIdGenerationForArgument(context.SemanticModel.Compilation, context.ReportDiagnostic, arg.Syntax, args);
             }
 
-            CheckForDuplicatedEventIds(context);
+            CheckForDuplicatedEventIds(context.ReportDiagnostic);
         }
 
-        private void CheckForDuplicatedEventIds(SemanticModelAnalysisContext context)
+        /// <summary>
+        /// Reports diagnostics for arguments with duplicated eventId values in <see cref="CompilationEventIds"/>.
+        /// </summary>
+        private void CheckForDuplicatedEventIds(Action<Diagnostic> reportDiagnostic)
         {
             foreach (var classRecord in CompilationEventIds.Values)
             {
@@ -114,27 +124,24 @@ namespace LoggerEventIdGenerator
                 {
                     foreach (var arg in group)
                     {
-                        var diagnostic = Diagnostic.Create(DiagnosticIdDuplicated, arg.Syntax.GetLocation(), arg.Syntax.GetText());
+                        var otherLocations = group.Except(new[] { arg }).Select(a => a.Location);
+                        var diagnostic = Diagnostic.Create(DiagnosticIdDuplicated, arg.Syntax.GetLocation(), otherLocations, arg.Syntax.GetText());
 
-                        context.ReportDiagnostic(diagnostic);
+                        reportDiagnostic(diagnostic);
                     }
                 }
             }
         }
 
+        /// <summary>
+        /// Reports a diagnostic for argument <paramref name="node"/> with a generated value for a new eventId.
+        /// </summary>
         private void ProcessEventIdGenerationForArgument(
             Compilation compilation,
             Action<Diagnostic> reportDiagnostic,
-            INamedTypeSymbol eventIdType,
-            INamedTypeSymbol attributeType,
             SyntaxNode node,
             List<ArgumentRecord> args)
         {
-            var encompassingType = node.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().First();
-            var model = compilation.GetSemanticModel(encompassingType.SyntaxTree);
-            var typeSymbol = model.GetDeclaredSymbol(encompassingType);
-            var typeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
             // args with 0
             var zeroArgsSpans = args.Where(static arg => arg.Value == 0)
                 .Select(a => a.Location.SourceSpan).OrderBy(static x => x).ToList();
@@ -159,10 +166,12 @@ namespace LoggerEventIdGenerator
                 throw new Exception("BUG: arg was not found on the list");
             }
 
-            uint newClassNum = (uint)MetroHash64.Run(typeName) & HighBitMask;
+            uint newClassNum;
             uint newEntryNum;
             if (maxId == 0)
             {
+                string typeName = GetEncompassingTypeNameForSyntaxNode(compilation, node);
+                newClassNum = (uint)MetroHash64.Run(typeName) & HighBitMask;
                 newEntryNum = (uint)index;
             }
             else
@@ -180,6 +189,19 @@ namespace LoggerEventIdGenerator
             reportDiagnostic(diagnostic);
         }
 
+        private static string GetEncompassingTypeNameForSyntaxNode(Compilation compilation, SyntaxNode node)
+        {
+            var encompassingType = node.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().First();
+            var model = compilation.GetSemanticModel(encompassingType.SyntaxTree);
+            var typeSymbol = model.GetDeclaredSymbol(encompassingType);
+            var typeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return typeName;
+        }
+
+        /// <summary>
+        /// Gets max entry value from a <see cref="ClassNumberRecord"/> dictionary or <c>-1</c> if there is no record present.
+        /// </summary>
+        /// <param name="maxClassNum">Max class number (upper part of value, see <see cref="HighBitMask"/>).</param>
         private int GetMaxEntryNumForCompilation(uint maxClassNum)
         {
             if (CompilationEventIds.TryGetValue(maxClassNum, out var record))
@@ -190,11 +212,18 @@ namespace LoggerEventIdGenerator
             return -1;
         }
 
-        private static List<ArgumentRecord> FindAllEventIdLiteralArgs(SyntaxTree syntaxTree, SemanticModel model, INamedTypeSymbol eventIdType, INamedTypeSymbol attributeType)
+        /// <summary>
+        /// Finds all instances of arguments in the semantic <paramref name="model"/> that represent logger EventIds.
+        /// </summary>
+        /// <param name="model">Semantic model (i.e. a semantic representation of a file).</param>
+        /// <param name="eventIdType">Type symbol for <c>Microsoft.Extensions.Logging.EventId</c>.</param>
+        /// <param name="attributeType">Type symbol for <c>Microsoft.Extensions.Logging.LoggerMessageAttribute</c>.</param>
+        /// <returns>List of argument records.</returns>
+        private static List<ArgumentRecord> FindAllEventIdLiteralArgs(SemanticModel model, INamedTypeSymbol eventIdType, INamedTypeSymbol attributeType)
         {
             var argumentOperations = new List<ArgumentRecord>(32);
 
-            foreach (var node in syntaxTree.GetRoot().DescendantNodes(static _ => true))
+            foreach (var node in model.SyntaxTree.GetRoot().DescendantNodes(static _ => true))
             {
                 if (node is ArgumentSyntax argSyn)
                 {
@@ -203,7 +232,7 @@ namespace LoggerEventIdGenerator
                         argOp.Parameter.Type.Equals(eventIdType, SymbolEqualityComparer.Default) &&
                         TryGetLiteralValue(argOp.Syntax, out int value))
                     {
-                        argumentOperations.Add(new ArgumentRecord((uint)value, argOp));
+                        argumentOperations.Add(new ArgumentRecord((uint)value, argOp.Syntax));
                     }
                 }
                 else if (node is AttributeSyntax attr && attributeType != null)
@@ -229,6 +258,12 @@ namespace LoggerEventIdGenerator
             return argumentOperations;
         }
 
+        /// <summary>
+        /// Try to get the <see cref="int"/> value out of a <see cref="LiteralExpressionSyntax"/> inside an argument <paramref name="node"/>.
+        /// </summary>
+        /// <param name="node">Argument node (<see cref="ArgumentSyntax"/> or <see cref="AttributeArgumentSyntax"/>).</param>
+        /// <param name="value">Outout value from literal passed as argument.</param>
+        /// <returns><c>true</c> if literal has been found, <c>false</c> otherwise.</returns>
         private static bool TryGetLiteralValue(SyntaxNode node, out int value)
         {
             ExpressionSyntax expression = null;
@@ -265,24 +300,18 @@ namespace LoggerEventIdGenerator
             return false;
         }
 
+        /// <summary>
+        /// Container for an argument syntax node and its value.
+        /// </summary>
         private struct ArgumentRecord
         {
             public uint Value { get; }
             public Location Location => Syntax.GetLocation();
             public SyntaxNode Syntax { get; }
-            public IArgumentOperation Operation { get; }
-
-            public ArgumentRecord(uint value, IArgumentOperation operation)
-            {
-                this.Value = value;
-                this.Operation = operation;
-                this.Syntax = operation.Syntax;
-            }
 
             public ArgumentRecord(uint value, SyntaxNode syntax)
             {
                 this.Value = value;
-                this.Operation = null;
                 this.Syntax = syntax;
             }
 
@@ -292,9 +321,19 @@ namespace LoggerEventIdGenerator
             public override int GetHashCode() => this.Location.GetHashCode();
         }
 
+        /// <summary>
+        /// A helper class holding arguments with the same upper part (see <see cref="HighBitMask"/>) of the value.
+        /// </summary>
         private class ClassNumberRecord
         {
+            /// <summary>
+            /// Maximum value of <see cref="Arguments"/> in the lower part (see <see cref="LowBitMask"/>) of the values.
+            /// </summary>
             public int MaxEntryValue { get; set; }
+
+            /// <summary>
+            /// Set of arguments with the same upper part (see <see cref="HighBitMask"/>) of the value.
+            /// </summary>
             public HashSet<ArgumentRecord> Arguments { get; set; }
         }
     }
