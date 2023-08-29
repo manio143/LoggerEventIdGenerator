@@ -1,5 +1,7 @@
 # LoggerEventIdGenerator
 
+[![NuGet version (LoggerEventIdGenerator)](https://img.shields.io/nuget/v/LoggerEventIdGenerator.svg)](https://www.nuget.org/packages/LoggerEventIdGenerator/)
+
 A small analyzer + code fix, that is meant to allow for easy generation of event Ids for your log statements.
 
 ![CodeFix to generate eventId on a LoggerMessage attribute](https://raw.githubusercontent.com/manio143/LoggerEventIdGenerator/master/docs/images/codefix_screenshot.png)
